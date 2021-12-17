@@ -1,6 +1,8 @@
 package orm
 
 import (
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm/logger"
 	"strings"
 	"time"
 
@@ -10,7 +12,7 @@ import (
 
 	// database driver
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/jinzhu/gorm"
+	"gorm.io/gorm"
 )
 
 // Config mysql config.
@@ -33,17 +35,21 @@ func init() {
 
 // NewMySQL new db and retry connection when has error.
 func NewMySQL(c *Config) (db *gorm.DB) {
-	db, err := gorm.Open("mysql", c.DSN)
+	db, err := gorm.Open(mysql.New(mysql.Config{DSN:c.DSN}), &gorm.Config{
+		Logger: logger.Default,
+	})
 	if err != nil {
 		log.Error("orm: open error(%v)", err)
 		panic(err)
 	}
-	db.DB().SetMaxIdleConns(c.Idle)
-	db.DB().SetMaxOpenConns(c.Active)
-	db.DB().SetConnMaxLifetime(time.Duration(c.IdleTimeout))
-	db.SetLogger(ormLog{})
+	sql, err := db.DB()
+	if err != nil {
+		log.Error("mysql: connPool error(%v)", err)
+		panic(err)
+	}
+	sql.SetMaxIdleConns(c.Idle)
+	sql.SetMaxOpenConns(c.Active)
+	sql.SetConnMaxLifetime(time.Duration(c.IdleTimeout))
 
-	db.Callback().Create().Replace("gorm:update_time_stamp", updateTimeStampForCreateCallback)
-	db.Callback().Update().Replace("gorm:update_time_stamp", updateTimeStampForUpdateCallback)
 	return
 }
